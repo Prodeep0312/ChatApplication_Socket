@@ -2,6 +2,9 @@
 #include<iostream>
 #include<winsock2.h>
 #include<tchar.h>
+#include<thread>
+#include<vector>
+#include<algorithm>
 
 using namespace std;
 
@@ -33,6 +36,34 @@ bool Initialize()
 {
     WSADATA data;
     return WSAStartup(MAKEWORD(2,2), &data)==0;
+}
+
+void InteractWithClient(SOCKET clientSocket, vector<SOCKET>& clients){
+ //recv
+   char buffer[4096];
+   while(1){
+    int bytes_received=recv(clientSocket,buffer,sizeof(buffer),0);
+
+    if(bytes_received <=0){
+        cout<<"client disconnected"<<endl;
+        break;
+    }
+
+   string message(buffer,bytes_received);
+   cout<<"message from client: "<<message<<endl;
+
+    for(auto it : clients )
+    {if(it != clientSocket){
+        send(it,message.c_str(),message.length(),0);
+    }
+    }
+    }
+   
+    auto it = find(clients.begin(), clients.end() , clientSocket);
+    if(it!=clients.end()){
+        clients.erase(it);
+    }
+   closesocket(clientSocket);
 }
 
 int main()
@@ -84,24 +115,25 @@ int main()
    }
 
    cout<<"Server has started listening on port: "<<port<<endl;
+   vector<SOCKET>clients;
 
-   //accept
-   SOCKET clientSocket=accept(listenSocket, nullptr, nullptr);
+    while(1){
+        //accept
+    SOCKET clientSocket=accept(listenSocket, nullptr, nullptr);
+    
 
-   if(clientSocket == INVALID_SOCKET)
-   {
-    cout<<"Invalid client socket"<<endl;
-    return 1;
-   }
+    if(clientSocket == INVALID_SOCKET)
+    {
+        cout<<"Invalid client socket"<<endl;
+        return 1;
+    }
+    clients.push_back(clientSocket);
+    thread t1(InteractWithClient, clientSocket,std::ref(clients));
+    t1.detach();
+    }
 
-   //recv
-   char buffer[4096];
-   int bytes_received=recv(clientSocket,buffer,sizeof(buffer),0);
-
-   string message(buffer,bytes_received);
-   cout<<"message from client: "<<message<<endl;
-
-   closesocket(clientSocket);
+  
+ 
    closesocket(listenSocket);
 
     WSACleanup();
